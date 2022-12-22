@@ -5,20 +5,66 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
+
+    <style>
+
+      *{
+        padding: 0;
+        margin: 0;
+      }
+
+      body{
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+
+      .holder{
+        display: none;
+        background-color: rgb(229, 229, 229);
+        width: fit-content;
+        flex-direction: column;
+        padding: 20px 20px;
+        border-radius: 20px;
+        gap: 20px;
+        max-width: 600px;
+      }
+
+      #form{
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .holder div{
+        display: flex;
+        flex-direction: column;
+      }
+
+    </style>
+
+
+
   </head>
 
-  <div>
-    data :  <span id="data-recieved" ></span>
+  <div id="wait">
+    <h2>please wait , sender not ready</h2>
   </div>
-
-  <input type="text" id="password">
-  <button onclick="check()">check data</button>
-
-  <div>
-    decrypted : <span id="decrypted"></span>
+  
+  <div id="ready" class="holder">
+    <span>
+      data :  <span id="data-recieved" ></span>
+    </span>
+  
+    <input type="text" id="password">
+    <button onclick="check()">check data</button>
+  
+    <div>
+      decrypted : <span id="decrypted"></span>
+    </div>
   </div>
-
 
 
   <body>
@@ -48,6 +94,18 @@
       });
 
 
+      socket.on("user connected",(data)=>{
+        socket.emit("reciever ready",true);
+      })
+
+      socket.on("sender ready",(data)=>{
+        socket.emit("reciever ready",true);
+        document.getElementById('wait').style.display = "none";
+        document.getElementById('ready').style.display = "flex";
+      })
+
+
+      socket.emit("reciever ready",true);
 
 
 
@@ -97,6 +155,15 @@
       async function check(){
         const password = document.getElementById('password').value;
 
+        if(!password){
+          alert("password cannot be empty");
+          return;
+        }
+
+        if(!key){
+          alert("data not recieved yet");
+          return;
+        }
 
         var secretKey = await generate_sec(key,password);
         
