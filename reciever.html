@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
+  </head>
+
+  <div>
+    data :  <span id="data-recieved" ></span>
+  </div>
+
+  <input type="text" id="password">
+  <button onclick="check()">check data</button>
+
+  <div>
+    decrypted : <span id="decrypted"></span>
+  </div>
+
+
+
+  <body>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io();
+      var data_store;
+      var enc = new TextDecoder();
+      var key;
+
+
+
+      const data_recieved = document.getElementById('data-recieved');
+      const decrypted_div = document.getElementById('decrypted');
+
+
+
+      socket.on("sender Data", (data) => {
+        data_store = data;
+        data_recieved.innerText = "true";
+      });
+
+
+
+      socket.on("sender key", (data) => {
+        key = data;
+      });
+
+
+
+
+
+      async function decrypt(secretKey, cipherText,password) {
+        var iv = password;
+        var iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
+        var decoded;
+        
+        try {
+          let decrypted = await window.crypto.subtle.decrypt(
+            {
+              name: "AES-GCM",
+              iv: iv,
+            },
+            secretKey,
+            cipherText
+          );
+
+          let dec = new TextDecoder();
+          decoded = dec.decode(decrypted);
+          decrypted_div.innerText = decoded;
+
+        } catch (e) {
+          console.log("error",e);
+          decrypted_div.innerText = "password error";
+        }
+        console.log(secretKey,cipherText,password)
+
+      }
+
+
+
+
+
+      async function generate_sec(exported_key,password){
+        var iv = password;
+        var iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
+        var generated_Key = await window.crypto.subtle.importKey("jwk",exported_key,{name: "AES-GCM" , iv},exported_key.ext,exported_key.key_ops)
+        return generated_Key;
+      }
+
+
+
+
+
+
+      async function check(){
+        const password = document.getElementById('password').value;
+
+
+        var secretKey = await generate_sec(key,password);
+        
+        decrypt(secretKey,data_store,password);
+        
+      }
+
+
+
+    </script>
+  </body>
+</html>

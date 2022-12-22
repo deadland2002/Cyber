@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>frontend</title>
+    <style></style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
+  </head>
+  <body>
+    <form id="form">
+      <input type="text" id="input" />
+      <input type="text" id="password" />
+      <button>submit</button>
+    </form>
+
+    <div>generated key : <span id="key"></span></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io();
+      var enc = new TextEncoder();
+      var dec = new TextDecoder();
+      var form = document.getElementById("form");
+      var user_key;
+
+      const key_span = document.getElementById("key");
+
+      async function encrypt(secretKey, message , password) {
+        
+        let iv = password;
+        iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
+        let encoded = enc.encode(message);
+
+        ciphertext = await window.crypto.subtle.encrypt(
+          {
+            name: "AES-GCM",
+            iv: iv,
+          },
+          secretKey,
+          encoded
+        );
+        return ciphertext;
+      }
+
+      async function decrypt(secretKey, cipherText,password) {
+        iv = password;
+        iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
+        try {
+          let decrypted = await window.crypto.subtle.decrypt(
+            {
+              name: "AES-GCM",
+              iv: iv,
+            },
+            secretKey,
+            cipherText
+          );
+
+          let dec = new TextDecoder();
+          console.log("Decrypted message: ");
+          console.log(dec.decode(decrypted));
+        } catch (e) {
+          console.log("error");
+        }
+      }
+
+      async function generatekey() {
+        let key = await window.crypto.subtle.generateKey(
+          {
+            name: "AES-GCM",
+            length: 256,
+          },
+          true,
+          ["encrypt", "decrypt"]
+        );
+
+
+
+        return key;
+      }
+
+
+
+
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        var input = document.getElementById("input").value;
+        var password = document.getElementById("password").value;
+
+
+        var secretKey = await generatekey();
+        var data = input;
+
+
+
+        var exported_key = await window.crypto.subtle.exportKey("jwk",secretKey);
+        var public_key = await JSON.stringify(exported_key);
+
+
+
+
+
+
+
+        let iv = password;
+        iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
+        var generated_Key = await window.crypto.subtle.importKey("jwk",exported_key,{name: "AES-GCM" , iv},exported_key.ext,exported_key.key_ops)
+
+
+
+        console.log(generated_Key);
+
+
+
+
+
+
+
+
+
+        
+        key_span.innerText = public_key;
+
+        var encrypted = await encrypt(secretKey,data,password);
+        
+        decrypt(generated_Key,encrypted,password)
+
+
+        socket.emit("Send cipher",encrypted);
+        socket.emit("Send key",exported_key);
+
+      });
+
+
+
+    </script>
+  </body>
+</html>
