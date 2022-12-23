@@ -140,7 +140,7 @@
 
           console.log(content);
 
-          const CHUNK_SIZE = 1024*100;
+          const CHUNK_SIZE = 100000;
           const totalChunks = event.target.result.byteLength / CHUNK_SIZE;
 
           const fileName = Math.random().toString(36).slice(-6) + file.name;
@@ -154,13 +154,18 @@
           var start = window.performance.now();
 
           for (let chunk = 0; chunk < totalChunks + 1; chunk++) {
+            
             let CHUNK = content.slice(
               chunk * CHUNK_SIZE,
               (chunk + 1) * CHUNK_SIZE
             );
+            
             var encrypted = await encrypt(secretKey, CHUNK, password);
             vals++;
+
             socket.emit("chunk", encrypted);
+            
+            await new Promise((resolve,reject)=>{ socket.on("chunk queue",(data)=>{ resolve() }) });
 
             document.getElementById("chunk-sent").innerText = chunk + 1;
           }
