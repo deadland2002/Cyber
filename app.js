@@ -1,7 +1,18 @@
 const express = require('express');
+const fs = require('fs');
 const app = express();
-const http = require('http')
-const server = http.createServer(app)
+const https = require('https')
+
+
+
+const options = {
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem'),
+};
+
+
+const server = https.createServer(options,app)
+
 const { Server } = require('socket.io');
 const io = new Server(server);
 
@@ -10,6 +21,11 @@ app.use(express.urlencoded({extended:true}));
 io.on('connection',(socket)=>{
   console.log("user connected")
   io.emit("user connected",true);
+
+  socket.on("disconnect",()=>{
+    console.log("user disconnected");
+    io.emit("user disconnected",true);
+  })
   
   socket.on('Send cipher',(data)=>{
     io.emit("sender Data",data);
@@ -23,10 +39,36 @@ io.on('connection',(socket)=>{
     io.emit("reciever ready",true);
   })
 
+  socket.on("file sent",(data)=>{
+    // console.log("file recieved");
+    io.emit("file sent",true);
+  })
+
+
+  socket.on("chunk",(chunk)=>{
+    io.emit("chunk redirect",chunk);
+  })
+  
+
+  socket.on("chunk recieved",(chunk)=>{
+    io.emit("chunk queue",true);
+  })
+  
+  
+  socket.on("total chunks",(data)=>{
+    console.log(data);
+    io.emit("total chunks redirect",data);
+  })
 
 
   socket.on("sender ready",(data)=>{
     io.emit("sender ready",true);
+  })
+  
+  
+  socket.on("file type send",(data)=>{
+    console.log(data);
+    io.emit("file type recieve",data);
   })
 
 
@@ -65,6 +107,13 @@ app.get('/recieve',(req,res)=>{
 app.get('*',(req,res)=>{
   res.send("server running");
 })
+
+
+
+
+
+
+
 
 
 

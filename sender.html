@@ -7,13 +7,12 @@
     <title>frontend</title>
     <style></style>
     <style>
-
-      *{
+      * {
         padding: 0;
         margin: 0;
       }
 
-      body{
+      body {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -21,7 +20,7 @@
         min-height: 100vh;
       }
 
-      .holder{
+      .holder {
         display: none;
         background-color: rgb(229, 229, 229);
         width: fit-content;
@@ -31,79 +30,77 @@
         gap: 20px;
       }
 
-      #form{
+      #form {
         display: flex;
         flex-direction: column;
         gap: 20px;
       }
 
-      .holder div{
+      .holder div {
         display: flex;
         flex-direction: column;
       }
-
     </style>
   </head>
   <body>
-
     <div id="wait">
-       <h2>please wait , reciever not ready</h2>
+      <h2>please wait , reciever not ready</h2>
     </div>
-
 
     <div id="ready" class="holder">
       <form id="form">
         <div>
           <span>enter data to send to reciever</span>
-          <input type="text" id="input" />
+          <input type="file" id="input" />
         </div>
-  
+
         <div>
           <span>enter password to encript</span>
           <input type="text" id="password" />
         </div>
         <button>submit</button>
       </form>
-      
+
       <span>status : <span id="status"></span></span>
+      <span> totalChunks : <span id="totalchunk-sent"></span> </span>
+      <span> current chunk : <span id="chunk-sent"></span> </span>
+      <span> time taken : <span id="time-taken"></span> </span>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-
-
-
       var socket = io();
-      var enc = new TextEncoder();
-      var dec = new TextDecoder();
+      var org = [];
       var form = document.getElementById("form");
       var user_key;
+
       const status_span = document.getElementById("status");
+      var vals = 0;
 
+      socket.emit("sender ready", true);
 
+      socket.on("user connected", (data) => {
+        socket.emit("sender ready", true);
+      });
 
-      socket.emit("sender ready",true);
-
-      socket.on("user connected",(data)=>{
-        socket.emit("sender ready",true);
-      })
-
-      socket.on("reciever ready",(data)=>{
-        socket.emit("sender ready",true);
+      socket.on("reciever ready", (data) => {
+        socket.emit("sender ready", true);
         document.getElementById("ready").style.display = "flex";
         document.getElementById("wait").style.display = "none";
-      })
+      });
 
+      socket.on("user disconnected", (data) => {
+        document.getElementById("wait").style.display = "block";
+        document.getElementById("ready").style.display = "none";
+      });
 
-
-
-
-
-
-      async function encrypt(secretKey, message , password) {
+      async function encrypt(secretKey, message, password) {
         let iv = password;
+
         iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
-        let encoded = enc.encode(message);
+
+        let encoded = new Uint8Array(message);
+
         ciphertext = await window.crypto.subtle.encrypt(
           {
             name: "AES-GCM",
@@ -114,9 +111,6 @@
         );
         return ciphertext;
       }
-
-
-
 
       async function generatekey() {
         let key = await window.crypto.subtle.generateKey(
@@ -130,41 +124,89 @@
         return key;
       }
 
+      async function senddata(file, secretKey, data, password) {
+        const fileReader = new FileReader();
+
+        fileReader.readAsArrayBuffer(file);
+
+        var filename = document.getElementById("input").files[0].name;
+
+        socket.emit("file type send", filename);
+
+        let fileUploaded = 0;
+
+        fileReader.onload = async (event) => {
+          const content = event.target.result;
+
+          console.log(content);
+
+          const CHUNK_SIZE = 1024*100;
+          const totalChunks = event.target.result.byteLength / CHUNK_SIZE;
+
+          const fileName = Math.random().toString(36).slice(-6) + file.name;
+
+          socket.emit("total chunks", Math.floor(totalChunks + 2));
+
+          document.getElementById("totalchunk-sent").innerText = Math.floor(
+            totalChunks + 2
+          );
+
+          var start = window.performance.now();
+
+          for (let chunk = 0; chunk < totalChunks + 1; chunk++) {
+            let CHUNK = content.slice(
+              chunk * CHUNK_SIZE,
+              (chunk + 1) * CHUNK_SIZE
+            );
+            var encrypted = await encrypt(secretKey, CHUNK, password);
+            vals++;
+            socket.emit("chunk", encrypted);
+
+            document.getElementById("chunk-sent").innerText = chunk + 1;
+          }
+
+          var end = window.performance.now();
+          var time = end - start;
+
+          document.getElementById("time-taken").innerText = time;
 
 
+          fileUploaded += 1;
+          socket.emit("file sent", true);
+        };
+      }
 
       form.addEventListener("submit", async function (e) {
         e.preventDefault();
 
-        var input = document.getElementById("input").value;
+        var input = document.getElementById("input");
         var password = document.getElementById("password").value;
 
-        if(!input){
-          alert("input cannot be empty")
+        if (!input) {
+          alert("input cannot be empty");
           return;
         }
 
-        if(!password){
-          alert("password cannot be empty")
+        if (!password) {
+          alert("password cannot be empty");
           return;
         }
-
 
         var secretKey = await generatekey();
         var data = input;
-        var exported_key = await window.crypto.subtle.exportKey("jwk",secretKey);
-        var encrypted = await encrypt(secretKey,data,password);
-        
 
-        socket.emit("Send cipher",encrypted);
-        socket.emit("Send key",exported_key);
+        var exported_key = await window.crypto.subtle.exportKey(
+          "jwk",
+          secretKey
+        );
+
+        senddata(input.files[0], secretKey, data, password);
+
+        socket.emit("Send cipher", true);
+        socket.emit("Send key", exported_key);
 
         status_span.innerText = "sent";
-
       });
-
-
-
     </script>
   </body>
 </html>

@@ -7,13 +7,12 @@
     <title>Document</title>
 
     <style>
-
-      *{
+      * {
         padding: 0;
         margin: 0;
       }
 
-      body{
+      body {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -21,7 +20,7 @@
         min-height: 100vh;
       }
 
-      .holder{
+      .holder {
         display: none;
         background-color: rgb(229, 229, 229);
         width: fit-content;
@@ -32,40 +31,38 @@
         max-width: 600px;
       }
 
-      #form{
+      #form {
         display: flex;
         flex-direction: column;
         gap: 20px;
       }
 
-      .holder div{
+      .holder div {
         display: flex;
         flex-direction: column;
       }
-
     </style>
-
-
-
   </head>
 
   <div id="wait">
     <h2>please wait , sender not ready</h2>
   </div>
-  
+
   <div id="ready" class="holder">
-    <span>
-      data :  <span id="data-recieved" ></span>
-    </span>
-  
-    <input type="text" id="password">
+    <span> data : <span id="data-recieved"></span> </span>
+    <span> totalChunks : <span id="totalchunk-recieved"></span> </span>
+    <span> current chunk : <span id="chunk-recieved"></span> </span>
+
+    <input type="text" id="password" />
     <button onclick="check()">check data</button>
-  
-    <div>
-      decrypted : <span id="decrypted"></span>
+
+    <div>decrypted : <span id="decrypted"></span></div>
+
+    <div id="display" style="display: none;">
+      <a href="" id="a_img" download>click here to download</a>
+      <img src="" alt="" id="img" />
     </div>
   </div>
-
 
   <body>
     <script src="/socket.io/socket.io.js"></script>
@@ -74,11 +71,24 @@
       var data_store;
       var enc = new TextDecoder();
       var key;
+      var chunks = [];
+      var data_chunks = [];
+      var fs = new FileReader();
+      var url;
+      var org;
+      var totalChunks;
+      var currchunks=0;
+      var type;
 
+      var dict = {
+        "pdf":"application/pdf"
+      }
 
+      const data_recieved = document.getElementById("data-recieved");
+      const totalchunk_recieved = document.getElementById("totalchunk-recieved");
+      const chunk_recieved = document.getElementById("chunk-recieved");
+      const decrypted_div = document.getElementById("decrypted");
 
-      const data_recieved = document.getElementById('data-recieved');
-      const decrypted_div = document.getElementById('decrypted');
 
 
 
@@ -87,33 +97,53 @@
         data_recieved.innerText = "true";
       });
 
-
-
       socket.on("sender key", (data) => {
         key = data;
       });
 
+      socket.on("user connected", (data) => {
+        socket.emit("reciever ready", true);
+      });
 
-      socket.on("user connected",(data)=>{
-        socket.emit("reciever ready",true);
-      })
+      socket.on("sender ready", (data) => {
+        socket.emit("reciever ready", true);
+        document.getElementById("wait").style.display = "none";
+        document.getElementById("ready").style.display = "flex";
+      });
 
-      socket.on("sender ready",(data)=>{
-        socket.emit("reciever ready",true);
-        document.getElementById('wait').style.display = "none";
-        document.getElementById('ready').style.display = "flex";
-      })
+      socket.on("chunk redirect", (data) => {
+        chunks.push(data);
+        socket.emit("chunk recieved",true)
+        currchunks++;
+        chunk_recieved.innerText = currchunks;
+      });
+      
+      
+      socket.on("total chunks redirect", (data) => {
+        totalChunks = data;
+        totalchunk_recieved.innerText = totalChunks;
+      });
+      
+      socket.on("file type recieve", (data) => {
+        type = data;
+      });
+      
+      
+      socket.on("user disconnected", (data) => {
+        document.getElementById("wait").style.display = "block";
+        document.getElementById("ready").style.display = "none";
+      });
+
+      socket.emit("reciever ready", true);
 
 
-      socket.emit("reciever ready",true);
 
 
-
-      async function decrypt(secretKey, cipherText,password) {
+      async function decrypt(secretKey, cipherText, password) {
         var iv = password;
         var iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
         var decoded;
-        
+
         try {
           let decrypted = await window.crypto.subtle.decrypt(
             {
@@ -125,54 +155,106 @@
           );
 
           let dec = new TextDecoder();
-          decoded = dec.decode(decrypted);
-          decrypted_div.innerText = decoded;
-
+          return decrypted;
         } catch (e) {
-          console.log("error",e);
           decrypted_div.innerText = "password error";
         }
-        console.log(secretKey,cipherText,password)
+        return false;
+
 
       }
 
-
-
-
-
-      async function generate_sec(exported_key,password){
+      async function generate_sec(exported_key, password) {
         var iv = password;
         var iv = Uint8Array.from(iv, (x) => x.charCodeAt(0));
-        var generated_Key = await window.crypto.subtle.importKey("jwk",exported_key,{name: "AES-GCM" , iv},exported_key.ext,exported_key.key_ops)
+        var generated_Key = await window.crypto.subtle.importKey(
+          "jwk",
+          exported_key,
+          { name: "AES-GCM", iv },
+          exported_key.ext,
+          exported_key.key_ops
+        );
         return generated_Key;
       }
 
 
 
+      async function retrive() {
+        return new Promise(async (resolve, reject) => {
+          let length = 0;
 
+          data_chunks.forEach((item) => {
+            length += item.byteLength;
+          });
 
+          // Create a new array with total length and merge all source arrays.
+          let mergedArray = new Uint8Array(length);
+          let offset = 0;
 
-      async function check(){
-        const password = document.getElementById('password').value;
+          await data_chunks.forEach((item) => {
 
-        if(!password){
+            var array = new Uint8Array(item, 0, item.byteLength);
+
+            mergedArray.set(array, offset);
+
+            offset += item.byteLength;
+            
+            if (length == offset) {
+              resolve(mergedArray);
+            }
+
+          });
+
+        });
+      }
+
+      async function check() {
+        const password = document.getElementById("password").value;
+
+        if (!password) {
           alert("password cannot be empty");
           return;
         }
 
-        if(!key){
+        if (!key) {
           alert("data not recieved yet");
           return;
         }
 
-        var secretKey = await generate_sec(key,password);
-        
-        decrypt(secretKey,data_store,password);
-        
+        var secretKey = await generate_sec(key, password);
+
+        console.log(secretKey)
+
+
+        for(const single of chunks){
+          var decrypted = await decrypt(secretKey, single, password);
+          
+          if(decrypted){
+            data_chunks.push(decrypted);
+          }
+          else{
+            alert("password incorrect")
+            return;
+          }
+        }
+
+        org = await retrive();
+
+        generate_img();
+
       }
 
 
+      function generate_img(){
+        let blob1 = new Blob([org]);
+          
+          url = URL.createObjectURL(blob1);
 
+          document.getElementById("img").setAttribute("src", url);
+          document.getElementById("a_img").setAttribute("href", url);
+          document.getElementById("a_img").setAttribute("download", type);
+          document.getElementById("display").style.display = "block";
+      }
     </script>
   </body>
 </html>
