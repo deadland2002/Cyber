@@ -1,17 +1,17 @@
 const express = require('express');
 const fs = require('fs');
 const app = express();
-const https = require('https')
+const https = require('http')
 
 
 
-const options = {
-  key: fs.readFileSync('key.pem'),
-  cert: fs.readFileSync('cert.pem'),
-};
+// const options = {
+//   key: fs.readFileSync('key.pem'),
+//   cert: fs.readFileSync('cert.pem'),
+// };
 
 
-const server = https.createServer(options,app)
+const server = https.createServer(app)
 
 const { Server } = require('socket.io');
 const io = new Server(server);
@@ -118,6 +118,6 @@ app.get('*',(req,res)=>{
 
 
 
-server.listen(8000,()=>{
+server.listen(8080,()=>{
   console.log("Server running");
 })
